@@ -6,9 +6,9 @@ import sys
 from datetime import datetime
 from math import ceil
 
-from mtools.util.input_source import InputSource
-from mtools.util.logevent import LogEvent
-from mtools.util.logformat import LogFormat
+from util.input_source import InputSource
+from util.logevent import LogEvent
+from util.logformat import LogFormat
 
 
 class LogFile(InputSource):

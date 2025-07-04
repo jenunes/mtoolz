@@ -1,6 +1,6 @@
 from .base_filter import BaseFilter
-from mtools.util.logevent import LogEvent
-from mtools.util.pattern import json2pattern
+from util.logevent import LogEvent
+from util.pattern import json2pattern
 
 
 def custom_parse_array(value):

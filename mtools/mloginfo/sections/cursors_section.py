@@ -1,10 +1,10 @@
 from collections import namedtuple
-from mtools.util import OrderedDict
-from mtools.util.grouping import Grouping
-from mtools.util.print_table import print_table
+from collections import OrderedDict
+from util.grouping import Grouping
+from util.print_table import print_table
 from operator import itemgetter
 from .base_section import BaseSection
-from mtools.util.logformat import LogFormat
+from util.logformat import LogFormat
 
 LogTuple = namedtuple('LogTuple', ['datetime', 'cursorid', 'reapedtime'])
 

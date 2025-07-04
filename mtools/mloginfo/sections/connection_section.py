@@ -2,10 +2,10 @@ import re
 from collections import defaultdict
 
 from .base_section import BaseSection
-from mtools.util.logformat import LogFormat
+from util.logformat import LogFormat
 
 try:
-    from mtools.util.profile_collection import ProfileCollection
+    from util.profile_collection import ProfileCollection
 except ImportError:
     ProfileCollection = None
 
@@ -41,9 +41,10 @@ class ConnectionSection(BaseSection):
 
     def run(self):
         """Run this section and print out information."""
-        if self.mloginfo.logfile.logformat != LogFormat.LEGACY:
+        if self.mloginfo.logfile.logformat not in [LogFormat.LEGACY, LogFormat.LOGV2]:
             print("\nERROR: mloginfo --connections currently only supports "
-                  "legacy log files\n(MongoDB 4.0 or older)\n")
+                  "legacy log files\n(MongoDB 4.0 or older) and JSON log files\n"
+                  "(MongoDB 4.4+)\n")
             return
 
         ip_opened = defaultdict(lambda: 0)
@@ -77,90 +78,178 @@ class ConnectionSection(BaseSection):
         for logevent in self.mloginfo.logfile:
             line = logevent.line_str
 
-            pos = line.find('connection accepted')
-            if pos != -1:
-                # connection was opened, increase counter
-                tokens = line[pos:pos + 100].split(' ')
-                if tokens[3] == 'anonymous':
-                    ip = 'anonymous'
-                else:
-                    ip, _ = tokens[3].split(':')
-                ip_opened[ip] += 1
+            # Handle JSON format (MongoDB 4.4+)
+            if self.mloginfo.logfile.logformat == LogFormat.LOGV2:
+                try:
+                    import json
+                    log_data = json.loads(line)
+                    
+                    # Check for connection accepted
+                    if (log_data.get('msg') == 'Connection accepted' and 
+                        log_data.get('c') == 'NETWORK'):
+                        remote = log_data.get('attr', {}).get('remote', 'unknown')
+                        connection_id = log_data.get('attr', {}).get('connectionId')
+                        
+                        # Extract IP from remote (format: "127.0.0.1:39416")
+                        if ':' in remote:
+                            ip = remote.split(':')[0]
+                        else:
+                            ip = remote
+                        
+                        ip_opened[ip] += 1
 
-                if genstats:
-                    connid = tokens[4].strip('#')
-                    dt = logevent.datetime
+                        if genstats and connection_id is not None:
+                            dt = logevent.datetime
+                            if dt is not None:
+                                if connections_start[connection_id] != START_TIME_EMPTY:
+                                    errmsg = ("Multiple start datetimes found for the "
+                                              "same connection ID. Consider analysing one "
+                                              "log sequence.")
+                                    raise NotImplementedError(errmsg)
+                                connections_start[connection_id] = dt
 
-                    # Sanity checks
-                    if connid.isdigit() is False or dt is None:
-                        continue
+                    # Check for connection ended
+                    elif (log_data.get('msg') == 'Connection ended' and 
+                          log_data.get('c') == 'NETWORK'):
+                        remote = log_data.get('attr', {}).get('remote', 'unknown')
+                        connection_id = log_data.get('attr', {}).get('connectionId')
+                        
+                        # Extract IP from remote (format: "127.0.0.1:39638")
+                        if ':' in remote:
+                            ip = remote.split(':')[0]
+                        else:
+                            ip = remote
+                        
+                        ip_closed[ip] += 1
 
-                    if connections_start[connid] != START_TIME_EMPTY:
-                        errmsg = ("Multiple start datetimes found for the "
-                                  "same connection ID. Consider analysing one "
-                                  "log sequence.")
-                        raise NotImplementedError(errmsg)
+                        if genstats and connection_id is not None:
+                            dt = logevent.datetime
+                            if (dt is not None and 
+                                connections_start[connection_id] != START_TIME_EMPTY):
+                                
+                                if connections_start[connection_id] == END_TIME_ALREADY_FOUND:
+                                    errmsg = ("Multiple end datetimes found for the same "
+                                              "connection ID %s. Consider analysing one "
+                                              "log sequence.")
+                                    raise NotImplementedError(errmsg % (connection_id))
 
-                    connections_start[connid] = dt
+                                dur = dt - connections_start[connection_id]
+                                dur_in_sec = dur.seconds
 
-            pos = line.find('end connection')
-            if pos != -1:
-                # connection was closed, increase counter
-                tokens = line[pos:pos + 100].split(' ')
-                if tokens[2] == 'anonymous':
-                    ip = 'anonymous'
-                else:
-                    ip, _ = tokens[2].split(':')
-                ip_closed[ip] += 1
+                                if dur_in_sec < min_connection_duration:
+                                    min_connection_duration = dur_in_sec
 
-                if genstats:
+                                if dur_in_sec > max_connection_duration:
+                                    max_connection_duration = dur_in_sec
 
-                    # Sanity check
-                    if end_connid_pattern.search(line, re.M | re.I) is None:
-                        continue
+                                if dur_in_sec < ipwise_min_connection_duration[ip]:
+                                    ipwise_min_connection_duration[ip] = dur_in_sec
 
-                    # The connection id value is stored just before end
-                    # connection -> [conn385] end connection
-                    end_connid = (end_connid_pattern.
-                                  search(line, re.M | re.I).group(1))
-                    dt = logevent.datetime
+                                if dur_in_sec > ipwise_max_connection_duration[ip]:
+                                    ipwise_max_connection_duration[ip] = dur_in_sec
 
-                    # Sanity checks
-                    if (end_connid.isdigit() is False or dt is None or
-                            connections_start[end_connid] == START_TIME_EMPTY):
-                        continue
+                                sum_durations += dur.seconds
+                                fullconn_counts += 1
 
-                    if connections_start[end_connid] == END_TIME_ALREADY_FOUND:
-                        errmsg = ("Multiple end datetimes found for the same "
-                                  "connection ID %s. Consider analysing one "
-                                  "log sequence.")
-                        raise NotImplementedError(errmsg % (end_connid))
+                                ipwise_sum_durations[ip] += dur_in_sec
+                                ipwise_count[ip] += 1
 
-                    dur = dt - connections_start[end_connid]
-                    dur_in_sec = dur.seconds
+                                connections_start[connection_id] = END_TIME_ALREADY_FOUND
 
-                    if dur_in_sec < min_connection_duration:
-                        min_connection_duration = dur_in_sec
+                    # Check for socket exceptions
+                    if "SocketException" in log_data.get('msg', ''):
+                        socket_exceptions += 1
+                        
+                except (json.JSONDecodeError, KeyError):
+                    # Skip malformed JSON lines
+                    continue
 
-                    if dur_in_sec > max_connection_duration:
-                        max_connection_duration = dur_in_sec
+            # Handle legacy format (MongoDB 4.0 and older)
+            else:
+                pos = line.find('connection accepted')
+                if pos != -1:
+                    # connection was opened, increase counter
+                    tokens = line[pos:pos + 100].split(' ')
+                    if tokens[3] == 'anonymous':
+                        ip = 'anonymous'
+                    else:
+                        ip, _ = tokens[3].split(':')
+                    ip_opened[ip] += 1
 
-                    if dur_in_sec < ipwise_min_connection_duration[ip]:
-                        ipwise_min_connection_duration[ip] = dur_in_sec
+                    if genstats:
+                        connid = tokens[4].strip('#')
+                        dt = logevent.datetime
 
-                    if dur_in_sec > ipwise_max_connection_duration[ip]:
-                        ipwise_max_connection_duration[ip] = dur_in_sec
+                        # Sanity checks
+                        if connid.isdigit() is False or dt is None:
+                            continue
 
-                    sum_durations += dur.seconds
-                    fullconn_counts += 1
+                        if connections_start[connid] != START_TIME_EMPTY:
+                            errmsg = ("Multiple start datetimes found for the "
+                                      "same connection ID. Consider analysing one "
+                                      "log sequence.")
+                            raise NotImplementedError(errmsg)
 
-                    ipwise_sum_durations[ip] += dur_in_sec
-                    ipwise_count[ip] += 1
+                        connections_start[connid] = dt
 
-                    connections_start[end_connid] = END_TIME_ALREADY_FOUND
+                pos = line.find('end connection')
+                if pos != -1:
+                    # connection was closed, increase counter
+                    tokens = line[pos:pos + 100].split(' ')
+                    if tokens[2] == 'anonymous':
+                        ip = 'anonymous'
+                    else:
+                        ip, _ = tokens[2].split(':')
+                    ip_closed[ip] += 1
 
-            if "SocketException" in line:
-                socket_exceptions += 1
+                    if genstats:
+
+                        # Sanity check
+                        if end_connid_pattern.search(line, re.M | re.I) is None:
+                            continue
+
+                        # The connection id value is stored just before end
+                        # connection -> [conn385] end connection
+                        end_connid = (end_connid_pattern.
+                                      search(line, re.M | re.I).group(1))
+                        dt = logevent.datetime
+
+                        # Sanity checks
+                        if (end_connid.isdigit() is False or dt is None or
+                                connections_start[end_connid] == START_TIME_EMPTY):
+                            continue
+
+                        if connections_start[end_connid] == END_TIME_ALREADY_FOUND:
+                            errmsg = ("Multiple end datetimes found for the same "
+                                      "connection ID %s. Consider analysing one "
+                                      "log sequence.")
+                            raise NotImplementedError(errmsg % (end_connid))
+
+                        dur = dt - connections_start[end_connid]
+                        dur_in_sec = dur.seconds
+
+                        if dur_in_sec < min_connection_duration:
+                            min_connection_duration = dur_in_sec
+
+                        if dur_in_sec > max_connection_duration:
+                            max_connection_duration = dur_in_sec
+
+                        if dur_in_sec < ipwise_min_connection_duration[ip]:
+                            ipwise_min_connection_duration[ip] = dur_in_sec
+
+                        if dur_in_sec > ipwise_max_connection_duration[ip]:
+                            ipwise_max_connection_duration[ip] = dur_in_sec
+
+                        sum_durations += dur.seconds
+                        fullconn_counts += 1
+
+                        ipwise_sum_durations[ip] += dur_in_sec
+                        ipwise_count[ip] += 1
+
+                        connections_start[end_connid] = END_TIME_ALREADY_FOUND
+
+                if "SocketException" in line:
+                    socket_exceptions += 1
 
         # calculate totals
         total_opened = sum(ip_opened.values())

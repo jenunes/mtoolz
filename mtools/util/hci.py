@@ -8,7 +8,7 @@ from dateutil import parser
 from dateutil.tz import tzutc
 from dateutil.utils import default_tzinfo
 
-from mtools.util import OrderedDict
+from collections import OrderedDict
 
 
 class DateTimeBoundaries(object):

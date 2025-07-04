@@ -1,5 +1,5 @@
 from .base_section import BaseSection
-from mtools.util.logformat import LogFormat
+from util.logformat import LogFormat
 
 class RsInfoSection(BaseSection):
     """

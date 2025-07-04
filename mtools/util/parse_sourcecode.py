@@ -11,7 +11,7 @@ from distutils.spawn import find_executable
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
-from mtools.util.logcodeline import LogCodeLine
+from util.logcodeline import LogCodeLine
 
 # Path to a local git clone from https://github.com/mongodb/mongo.git
 mongodb_path = "/usr/local/src/mongo/"

@@ -11,11 +11,11 @@ import sys
 
 from dateutil.tz import tzutc
 
-from mtools.util.logfile import LogFile
+from util.logfile import LogFile
 from mtools.version import __version__
 
 try:
-    from mtools.util.profile_collection import ProfileCollection
+    from util.profile_collection import ProfileCollection
 
     class InputSourceAction(argparse.FileType):
         """

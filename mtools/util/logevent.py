@@ -8,8 +8,8 @@ from datetime import datetime
 import dateutil.parser
 from dateutil.tz import tzutc
 
-from mtools.util.pattern import json2pattern
-from mtools.util.logformat import LogFormat
+from util.pattern import json2pattern
+from util.logformat import LogFormat
 
 class DateTimeEncoder(json.JSONEncoder):
     """Custom datetime encoder for json output."""

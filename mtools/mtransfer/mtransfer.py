@@ -7,7 +7,7 @@ import sys
 import bson
 import wiredtiger
 
-from mtools.util.cmdlinetool import BaseCmdLineTool
+from util.cmdlinetool import BaseCmdLineTool
 from mtools.version import __version__
 
 codec_options = bson.codec_options.CodecOptions(uuid_representation=bson.binary.STANDARD)

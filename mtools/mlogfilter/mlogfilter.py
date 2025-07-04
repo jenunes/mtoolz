@@ -8,7 +8,7 @@ from datetime import MAXYEAR, MINYEAR, datetime, timedelta
 from dateutil.tz import tzutc
 
 import mtools.mlogfilter.filters as filters
-from mtools.util.cmdlinetool import LogFileTool
+from util.cmdlinetool import LogFileTool
 
 
 class MLogFilterTool(LogFileTool):

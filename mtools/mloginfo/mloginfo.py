@@ -4,9 +4,9 @@ import datetime
 import inspect
 import sys
 
-import mtools.mloginfo.sections as sections
-from mtools.util.cmdlinetool import LogFileTool
-from mtools.util.logformat import LogFormat
+import mloginfo.sections as sections
+from util.cmdlinetool import LogFileTool
+from util.logformat import LogFormat
 
 class MLogInfoTool(LogFileTool):
 

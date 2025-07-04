@@ -11,7 +11,7 @@ from datetime import timedelta
 from dateutil.tz import tzutc
 
 from mtools import __version__
-from mtools.util.cmdlinetool import LogFileTool
+from util.cmdlinetool import LogFileTool
 
 try:
     import matplotlib

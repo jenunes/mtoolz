@@ -3,7 +3,7 @@
 
 import re
 
-from mtools.util import OrderedDict
+from collections import OrderedDict
 
 
 class Grouping(object):

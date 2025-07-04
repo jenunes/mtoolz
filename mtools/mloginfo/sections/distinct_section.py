@@ -1,10 +1,10 @@
 from collections import defaultdict
 
 from .base_section import BaseSection
-from mtools.util.logformat import LogFormat
+from util.logformat import LogFormat
 
 try:
-    from mtools.util.profile_collection import ProfileCollection
+    from util.profile_collection import ProfileCollection
 except ImportError:
     ProfileCollection = None
 

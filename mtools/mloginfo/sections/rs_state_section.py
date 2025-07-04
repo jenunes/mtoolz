@@ -1,7 +1,7 @@
 from .base_section import BaseSection
-from mtools.util import OrderedDict
-from mtools.util.print_table import print_table
-from mtools.util.logformat import LogFormat
+from collections import OrderedDict
+from util.print_table import print_table
+from util.logformat import LogFormat
 
 class RsStateSection(BaseSection):
     """
