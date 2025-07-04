@@ -4,7 +4,7 @@ import datetime
 import inspect
 import sys
 
-import sections
+from . import sections
 from util.cmdlinetool import LogFileTool
 from util.logformat import LogFormat
 
